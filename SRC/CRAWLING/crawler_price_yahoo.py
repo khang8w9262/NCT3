@@ -188,7 +188,7 @@ class AdvancedYahooFetcher:
         
         # Convert to desired format
         if format == 'standard':
-            # Standard English format (Date, Open, High, Low, Close, Adj Close, Volume)
+            # Standard English format (Date, Open, High, Low, Close, Volume)
             df_output = pd.DataFrame()
             
             # Handle timezone-aware dates
@@ -204,7 +204,7 @@ class AdvancedYahooFetcher:
             df_output['High'] = data['High'].values.round(2)
             df_output['Low'] = data['Low'].values.round(2)
             df_output['Close'] = data['Close'].values.round(2)
-            df_output['Adj Close'] = data['Volume'].values.astype(int)
+            df_output['Volume'] = data['Volume'].values.astype(int)
             
             print(f"Output DataFrame:")
             print(df_output.head(2))
