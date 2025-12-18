@@ -2,217 +2,372 @@ from seleniumbase import Driver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from selenium.common.exceptions import TimeoutException
 import pandas as pd
 import time
-from retrying import retry
 import os
 import random
+import sys
+import subprocess
+import re
+from datetime import datetime
 
-# Hàm retry nếu gặp lỗi
-def retry_if_exception(exception):
-    return isinstance(exception, Exception)
+# --- CẤU HÌNH ---
+PAGE_LOAD_TIMEOUT = 60 
+GLOBAL_PROCESSED_URLS = set()
 
-@retry(wait_exponential_multiplier=1000, wait_exponential_max=10000, stop_max_attempt_number=3)
-def safe_find_element(driver, by, value):
-    return driver.find_element(by, value)
-
-@retry(wait_exponential_multiplier=1000, wait_exponential_max=10000, stop_max_attempt_number=3)
-def safe_open_url(driver, url):
-    driver.uc_open_with_reconnect(url, 4)
-
-# Hàm kiểm tra xem bài viết đã tồn tại trong CSV hay chưa dựa trên URL
-def is_article_already_scraped(url, filename="investing_articles_uc.csv"):
-    if not os.path.exists(filename):
-        return False
-        
+# --- HÀM DIỆT PROCESS CŨ ---
+def kill_browser_processes():
     try:
-        df = pd.read_csv(filename, encoding="utf-8-sig")
-        if 'URL' in df.columns and url in df['URL'].values:
-            print(f"URL đã tồn tại: {url}")
-            return True
-        return False
+        if sys.platform == "win32":
+            subprocess.call("taskkill /f /im chromedriver.exe >nul 2>&1", shell=True)
+            subprocess.call("taskkill /f /im chrome.exe >nul 2>&1", shell=True)
+    except:
+        pass
+
+# --- KHỞI TẠO DRIVER (BẢN FIX LỖI SẬP) ---
+def init_driver():
+    print("Đang khởi động trình duyệt (Chế độ UC Subprocess)...")
+    try:
+        # uc_subprocess=True: QUAN TRỌNG - Giúp driver chạy tách biệt, không bị sập kết nối
+        driver = Driver(uc=True, headless=False, uc_subprocess=True) 
+        driver.set_page_load_timeout(PAGE_LOAD_TIMEOUT)
+        return driver
     except Exception as e:
-        print(f"Lỗi khi kiểm tra bài viết trùng lặp: {e}")
-        return False
+        print(f"Lỗi khởi tạo driver: {e}")
+        return None
 
-# Hàm lưu dữ liệu vào CSV
-def save_to_csv(df, symbol=None):
-    # Lưu file vào DATASET/SENTIMENT, tên file theo mã chứng khoán (in hoa)
-    if symbol is None:
-        symbol = "output"
-    out_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "DATASET", "SENTIMENT")
-    os.makedirs(out_dir, exist_ok=True)
-    filename = os.path.join(out_dir, f"{symbol.upper()}.csv")
-    # Chỉ lưu 3 cột: Date, Header, Content
-    df2 = df[["Date", "Header", "Content"]].copy()
-    exists = os.path.exists(filename)
-    if exists:
-        try:
-            existing_df = pd.read_csv(filename, encoding="utf-8-sig")
-            combined_df = pd.concat([existing_df, df2])
-            combined_df = combined_df.drop_duplicates(subset=["Date", "Header"], keep='first')
-            combined_df.to_csv(filename, index=False, encoding="utf-8-sig")
-        except Exception as e:
-            print(f"Lỗi khi kết hợp dữ liệu: {e}")
-            df2.to_csv(filename, index=False, encoding="utf-8-sig", mode='a', header=not exists)
-    else:
-        df2.to_csv(filename, index=False, encoding="utf-8-sig")
-
-# Hàm lấy chi tiết bài báo từ tab hiện tại
-def get_article_details_from_current_tab(driver):
-    wait = WebDriverWait(driver, 30)
-    current_url = driver.current_url
+# --- HÀM CHUẨN HÓA NGÀY (DD-MM-YYYY) ---
+def format_date_standard(date_str):
+    if not date_str or date_str == "Unknown": return "Unknown"
+    date_str = date_str.strip()
     
+    # 1. Dạng "trước/ago" -> Lấy hôm nay
+    if any(x in date_str.lower() for x in ['trước', 'ago', 'min', 'hour', 'sec', 'vừa']):
+        return datetime.now().strftime("%d-%m-%Y")
+
+    # 2. Dạng "14/12/2025"
+    match = re.search(r'(\d{1,2})[/-](\d{1,2})[/-](\d{4})', date_str)
+    if match:
+        day, month, year = match.groups()
+        return f"{int(day):02d}/{int(month):02d}/{year}"
+
+    # 3. Dạng tiếng Anh "Dec 14, 2025"
     try:
-        driver.execute_script("return document.readyState === 'complete';")
+        clean_str = date_str.replace("(", "").replace(")", "").strip()
+        for fmt in ["%b %d, %Y", "%B %d, %Y"]:
+            try:
+                dt = datetime.strptime(clean_str, fmt)
+                return dt.strftime("%d/%m/%Y")
+            except: continue
+    except: pass
+    
+    return date_str
+
+# --- XỬ LÝ CLOUDFLARE ---
+def handle_cloudflare_check(driver):
+    try:
+        title = driver.title.lower()
+        # Kiểm tra kỹ cả Title và Source để bắt Captcha
+        if "just a moment" in title or "verify you are human" in driver.page_source.lower():
+            print("\nDÍNH CAPTCHA! Vui lòng CLICK xác thực trên trình duyệt...")
+            # Chờ tối đa 60s
+            for i in range(60):
+                time.sleep(1)
+                if "just a moment" not in driver.title.lower():
+                    print("Đã vượt qua! Tiếp tục...")
+                    time.sleep(2) 
+                    return True
+            return False
+    except:
+        pass
+    return True
+
+# --- CÁC HÀM HỖ TRỢ ---
+def visual_wait(seconds, message="Đang đợi"):
+    for i in range(seconds, 0, -1):
+        sys.stdout.write(f"\r{message}: {i}s...   ")
+        sys.stdout.flush()
         time.sleep(1)
-        date_elem = wait.until(
-            EC.presence_of_element_located(
-                (By.XPATH, "//div[contains(@class, 'text-warren-gray-700')]//span[contains(text(), 'Ngày đăng')]")
-            )
-        )
-        date_text = date_elem.text.strip()
-        article_date = date_text.replace("Ngày đăng", "").strip()
-    except Exception:
-        article_date = "Unknown"
-    
-    try:
-        header_elem = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "h1")))
-        header = header_elem.text.strip()
-    except Exception:
-        header = "Unknown"
-    
-    content = ""
-    try:
-        content_elem = wait.until(
-            EC.presence_of_element_located(
-                (By.CSS_SELECTOR, "div#article div.article_WYSIWYG__O0uhw.article_articlePage__UMz3q")
-            )
-        )
-        paragraphs = content_elem.find_elements(By.CSS_SELECTOR, "p")
-        special_text = "Bài viết này được tạo và dịch với sự hỗ trợ của AI và đã được biên tập viên xem xét."
-        for p in paragraphs:
-            p_text = p.text.strip()
-            if special_text in p_text:
-                break
-            content += p_text + "\n"
-    except Exception:
-        content = "Content not found"
-    
-    return article_date, header, content, current_url
-
-# Tạo một tập hợp để theo dõi URL đã duyệt trong phiên hiện tại
-processed_urls = set()
+    sys.stdout.write("\r" + " " * (len(message) + 15) + "\r")
+    sys.stdout.flush()
 
 def get_equity_url(symbol_or_name):
-    """
-    Ánh xạ tên/mã chứng khoán sang URL investing.com
-    Có thể mở rộng thêm mã khác nếu cần.
-    """
     mapping = {
-        # mã hoặc tên: phần cuối URL
-        'apple': 'apple-computer-inc',
-        'aapl': 'apple-computer-inc',
-        'vinamilk': 'vietnam-dairy-products-jsc',
-        'vnm': 'vietnam-dairy-products-jsc',
-        'vietcombank': 'joint-stock-commercial-bank-for-foreign-trade-of-viet',
-        'vcb': 'joint-stock-commercial-bank-for-foreign-trade-of-viet',
+        'apple': 'apple-computer-inc', 'aapl': 'apple-computer-inc',
+        'vinamilk': 'vietnam-dairy-products-jsc', 'vnm': 'vietnam-dairy-products-jsc',
+        'vietcombank': 'joint-stock-commercial-bank-for-foreign-trade-of-viet', 'vcb': 'joint-stock-commercial-bank-for-foreign-trade-of-viet',
         'fpt': 'fpt-corp',
-        'fpt corp': 'fpt-corp',
-        'vietinbank': 'vietnam-joint-stock-commercial-bank-for-industry-and-trade',
-        'ctg': 'vietnam-joint-stock-commercial-bank-for-industry-and-trade',
-        'bidv': 'joint-stock-commercial-bank-for-investment-and-developmen',
-        'bid': 'joint-stock-commercial-bank-for-investment-and-developmen',
-        'google': 'google-inc',
-        'googl': 'google-inc',
-        'goog': 'google-inc-c',
-        # Thêm các mã khác nếu cần
+        'vietinbank': 'vietnam-joint-stock-commercial-bank-for-industry-and-trade', 'ctg': 'vietnam-joint-stock-commercial-bank-for-industry-and-trade',
+        'bidv': 'joint-stock-commercial-bank-for-investment-and-developmen', 'bid': 'joint-stock-commercial-bank-for-investment-and-developmen',
+        'google': 'google-inc', 'googl': 'google-inc', 'goog': 'google-inc-c',
+        'alibaba': 'alibaba', 'baba': 'alibaba',
+        
     }
     key = symbol_or_name.strip().lower()
     if key in mapping:
         return f"https://vn.investing.com/equities/{mapping[key]}-news"
-    # Nếu nhập đúng slug investing thì dùng luôn
     if key.startswith('https://vn.investing.com/equities/'):
         return key
-    # fallback: báo lỗi
-    raise ValueError(f"Không tìm thấy mã/tên chứng khoán '{symbol_or_name}'. Hãy cập nhật mapping trong code.")
+    return f"https://vn.investing.com/equities/{key}-news"
+
+def is_header_already_scraped(header_text, ticker_name):
+    filename = f"{ticker_name.upper()}.csv"
+    out_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "DATASET", "SENTIMENT")
+    out_path = os.path.join(out_dir, filename)
+    if os.path.exists(out_path):
+        try:
+            df = pd.read_csv(out_path, encoding="utf-8-sig")
+            if 'Header' in df.columns and header_text in df['Header'].values:
+                return True
+        except: pass
+    return False
+
+def save_to_csv(df, ticker_name):
+    filename = f"{ticker_name.upper()}.csv"
+    out_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "DATASET", "SENTIMENT")
+    os.makedirs(out_dir, exist_ok=True)
+    out_path = os.path.join(out_dir, filename)
+    if 'URL' in df.columns: df = df.drop(columns=['URL'])
+    # Normalize Date column to DD-MM-YYYY for both new and existing data
+    try:
+        if 'Date' in df.columns:
+            df['Date'] = df['Date'].apply(lambda x: format_date_standard(x) if pd.notnull(x) else x)
+    except Exception:
+        pass
+
+    if os.path.exists(out_path):
+        try:
+            existing_df = pd.read_csv(out_path, encoding="utf-8-sig")
+            if 'Date' in existing_df.columns:
+                try:
+                    existing_df['Date'] = existing_df['Date'].apply(lambda x: format_date_standard(x) if pd.notnull(x) else x)
+                except Exception:
+                    pass
+            combined_df = pd.concat([existing_df, df], ignore_index=True)
+            combined_df = combined_df.drop_duplicates(subset=['Header'], keep='first')
+            combined_df.to_csv(out_path, index=False, encoding="utf-8-sig")
+        except Exception:
+            df.to_csv(out_path, index=False, encoding="utf-8-sig", mode='a', header=False)
+    else:
+        df.to_csv(out_path, index=False, encoding="utf-8-sig")
+
+def get_article_content(driver):
+    try:
+        handle_cloudflare_check(driver)
+        WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.TAG_NAME, "h1")))
+        # 1. Ngày đăng (sử dụng hàm trích xuất mạnh mẽ)
+        article_date = extract_article_date(driver)
+
+        # 2. Header
+        header = "Unknown"
+        try:
+            header = driver.find_element(By.TAG_NAME, "h1").text.strip()
+        except: pass
+            
+        # 3. Content
+        content = ""
+        try:
+            paragraphs = driver.find_elements(By.XPATH, "//div[contains(@class, 'articlePage')]//p")
+            if not paragraphs:
+                paragraphs = driver.find_elements(By.XPATH, "//div[contains(@class, 'WYSIWYG')]//p")
+            special_text = "Bai viet nay duoc tao va dich voi su ho tro cua AI"
+            for p in paragraphs:
+                p_text = p.text.strip()
+                if special_text in p_text: break
+                if p_text: content += p_text + "\n"
+        except: content = "Content not found"
+            
+        return article_date, header, content
+    except: return "Unknown", "Unknown", "Error"
+
+
+def extract_article_date(driver):
+    """Try multiple strategies to extract the article publication date from the page.
+    Returns a formatted date string (DD-MM-YYYY) or 'Unknown'.
+    """
+    # 1) meta tags like article:published_time
+    try:
+        metas = driver.find_elements(By.XPATH, "//meta[@property='article:published_time' or @property='og:article:published_time' or @name='pubdate' or @name='article:published_time']")
+        for m in metas:
+            content = m.get_attribute('content')
+            if content:
+                # content often like 2025-12-14T08:00:00Z or Dec 14, 2025
+                # normalize by taking date part or parsing
+                # Try ISO-like
+                iso_match = re.search(r"(\d{4}-\d{2}-\d{2})", content)
+                if iso_match:
+                    return format_date_standard(iso_match.group(1))
+                return format_date_standard(content)
+    except: pass
+
+    # 2) <time datetime="..."> tags
+    try:
+        times = driver.find_elements(By.TAG_NAME, 'time')
+        for t in times:
+            dt = t.get_attribute('datetime')
+            text = t.text
+            if dt:
+                iso_match = re.search(r"(\d{4}-\d{2}-\d{2})", dt)
+                if iso_match:
+                    return format_date_standard(iso_match.group(1))
+            if text:
+                # if the time element has readable text
+                parsed = format_date_standard(text)
+                if parsed != text and parsed != 'Unknown':
+                    return parsed
+    except: pass
+
+    # 3) Look for nodes containing 'Published' or 'Ngày đăng' or variants
+    try:
+        candidates = driver.find_elements(By.XPATH, "//*[contains(text(), 'Published') or contains(text(), 'Published:') or contains(text(), 'Ngày đăng') or contains(text(), 'Ngày đăng:') or contains(text(), 'Ngay dang')]")
+        for c in candidates:
+            txt = c.text.strip()
+            # remove label words
+            txt_clean = re.sub(r"(?i)Published[:]?")
+            txt_clean = txt.lower().replace('published', '').replace('ngày đăng', '').replace('ngay dang', '').replace(':', '').strip()
+            if txt_clean:
+                parsed = format_date_standard(txt_clean)
+                if parsed != 'Unknown':
+                    return parsed
+    except: pass
+
+    # 4) Regex search in page source for ISO datetime
+    try:
+        src = driver.page_source
+        m = re.search(r"(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})", src)
+        if m:
+            return format_date_standard(m.group(1))
+        m2 = re.search(r"(\d{1,2}[/-]\d{1,2}[/-]\d{4})", src)
+        if m2:
+            return format_date_standard(m2.group(1))
+    except: pass
+
+    return 'Unknown'
+
+def safe_get(driver, url):
+    try:
+        driver.get(url)
+    except TimeoutException: pass 
+    except Exception as e: raise e
+
+def process_page(driver, base_url, page_num, ticker_filename):
+    url = base_url if page_num == 1 else f"{base_url}/{page_num}"
+    print(f"\n--- ĐANG MỞ TRANG: {page_num} ---")
+    print(f"Link: {url}")
+    
+    safe_get(driver, url)
+    handle_cloudflare_check(driver)
+    
+    try: driver.execute_script("window.scrollTo(0, 500);")
+    except: pass
+
+    try:
+        WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.CSS_SELECTOR, "article[data-test='article-item']")))
+    except:
+        if "Just a moment" in driver.title:
+            print("Dính Captcha. Đợi xử lý...")
+            handle_cloudflare_check(driver)
+            try: WebDriverWait(driver, 5).until(EC.presence_of_element_located((By.CSS_SELECTOR, "article[data-test='article-item']")))
+            except: return False
+        else:
+            print(f"Hết bài hoặc lỗi trang {page_num}.")
+            return False
+
+    article_items = driver.find_elements(By.CSS_SELECTOR, "article[data-test='article-item']")
+    links_to_visit = []
+    
+    for article in article_items:
+        try:
+            if article.find_elements(By.XPATH, ".//*[contains(@class, 'fa-lock')]") or "PRO" in article.text: continue
+            link_elem = article.find_element(By.CSS_SELECTOR, "a[data-test='article-title-link']")
+            links_to_visit.append(link_elem.get_attribute("href"))
+        except: continue
+
+    if not links_to_visit: return False
+    print(f"Tìm thấy {len(links_to_visit)} bài.")
+    
+    articles_data = []
+    
+    for idx, article_url in enumerate(links_to_visit, 1):
+        if article_url in GLOBAL_PROCESSED_URLS: continue
+        sys.stdout.write(f"   [Bài {idx}/{len(links_to_visit)}] Đang đọc... ")
+        sys.stdout.flush()
+        
+        main_window = driver.current_window_handle
+        try:
+            driver.execute_script("window.open(arguments[0], '_blank');", article_url)
+            time.sleep(1)
+            driver.switch_to.window([w for w in driver.window_handles if w != main_window][0])
+            
+            a_date, a_header, a_content = get_article_content(driver)
+            
+            if is_header_already_scraped(a_header, ticker_filename):
+                print(f"Đã có (Skip)")
+            elif len(a_content) > 50:
+                articles_data.append([a_date, a_header, a_content, article_url])
+                print(f"OK ({a_date}): {a_header[:30]}...")
+            elif "just a moment" in driver.title.lower():
+                print("Dính Captcha...")
+            else:
+                print("Ngắn/Lỗi.")
+                GLOBAL_PROCESSED_URLS.add(article_url)
+
+            if "just a moment" not in driver.title.lower():
+                GLOBAL_PROCESSED_URLS.add(article_url)
+            
+            driver.close()
+            driver.switch_to.window(main_window)
+            time.sleep(1)
+        except Exception as e:
+            if any(x in str(e) for x in ["WinError", "Refused", "died"]): raise e
+            try: 
+                if len(driver.window_handles) > 1: driver.close()
+                driver.switch_to.window(main_window)
+            except: pass
+
+    if articles_data:
+        df = pd.DataFrame(articles_data, columns=["Date", "Header", "Content", "URL"])
+        df["Content"] = df["Content"].astype(str)
+        save_to_csv(df, ticker_filename)
+        print(f"Đã lưu {len(articles_data)} bài.")
+    
+    return True
 
 def crawl_investing():
-    symbol_or_name = input("Nhập tên hoặc mã chứng khoán (ví dụ: vinamilk, VNM, vietcombank, VCB): ").strip()
-    try:
-        base_url = get_equity_url(symbol_or_name)
-    except Exception as e:
-        print(e)
-        return
-    driver = Driver(uc=True, undetectable=True)
-    articles = []
-    total_pages = 300
-    try:
-        safe_open_url(driver, base_url)
-        wait = WebDriverWait(driver, 30)
-        wait.until(lambda d: d.execute_script('return document.readyState') == 'complete')
-        wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "article[data-test='article-item']")))
-        for page in range(1, total_pages + 1):
-            if page > 1:
-                url = f"{base_url}/{page}"
-                print(f"Opening page: {url}")
-                safe_open_url(driver, url)
-                wait.until(lambda d: d.execute_script('return document.readyState') == 'complete')
-            try:
-                wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "article[data-test='article-item']")))
-            except Exception as e:
-                print(f"Timeout waiting for articles on page {page}: {e}")
-                continue
-            article_items = driver.find_elements(By.CSS_SELECTOR, "article[data-test='article-item']")
-            if not article_items:
-                print(f"Không tìm thấy bài báo trên trang {page}")
-                break
-            for article in article_items:
-                try:
-                    pro_label_elements = article.find_elements(
-                        By.XPATH, ".//div[contains(@class, 'mb-1') and contains(@class, 'mt-2.5') and contains(@class, 'flex')]"
-                    )
-                    if pro_label_elements:
-                        print("Skipping pro article")
-                        continue
-                    link_elem = safe_find_element(article, By.CSS_SELECTOR, "a[data-test='article-title-link']")
-                    article_url = link_elem.get_attribute("href")
-                    if article_url in processed_urls:
-                        print(f"Đã xử lý URL trong phiên này, bỏ qua: {article_url}")
-                        continue
-                    if is_article_already_scraped(article_url):
-                        print(f"Bài viết đã tồn tại trong CSV, bỏ qua: {article_url}")
-                        processed_urls.add(article_url)
-                        continue
-                    print(f"Found article: {article_url}")
-                    driver.execute_script("window.open(arguments[0], '_blank');", article_url)
-                    driver.switch_to.window(driver.window_handles[-1])
-                    time.sleep(1)
-                    article_date, header, content, current_url = get_article_details_from_current_tab(driver)
-                    articles.append([article_date, header, content, current_url])
-                    processed_urls.add(article_url)
-                    driver.close()
-                    driver.switch_to.window(driver.window_handles[0])
-                except Exception as e:
-                    print(f"Error processing article: {e}")
-                    if len(driver.window_handles) > 1:
-                        driver.close()
-                    driver.switch_to.window(driver.window_handles[0])
-                    continue
-            if articles:
-                df = pd.DataFrame(articles, columns=["Date", "Header", "Content", "URL"])
-                df["Content"] = df["Content"].astype(str)
-                save_to_csv(df, symbol=symbol_or_name)
-                articles = []
-            print(f"Đã cào xong trang {page}")
-            time.sleep(random.uniform(1, 5))  # Độ trễ ngẫu nhiên
-        if articles:
-            df = pd.DataFrame(articles, columns=["Date", "Header", "Content", "URL"])
-            df["Content"] = df["Content"].astype(str)
-            save_to_csv(df, symbol=symbol_or_name)
-        print(f"Crawling completed and saved to DATASET/SENTIMENT/{symbol_or_name.upper()}.csv")
-    finally:
-        driver.quit()
+    kill_browser_processes()
+    symbol = input("Nhập mã chứng khoán (VNM, ALIBABA...): ").strip()
+    ticker = symbol.upper()
+    base_url = get_equity_url(symbol)
+    
+    # --- START DRIVER ---
+    driver = init_driver()
+    if not driver: return
+    
+    # Đợi driver ổn định
+    time.sleep(4) 
+    
+    page = 1
+    while page <= 300:
+        try:
+            if driver is None: 
+                driver = init_driver()
+                time.sleep(4)
+            
+            if not process_page(driver, base_url, page, ticker):
+                print(" Hết bài/Lỗi. Chuyển trang...")
+            page += 1
+            
+        except Exception as e:
+            print(f"\n LỖI SYSTEM: {str(e)[:50]}... -> Restarting")
+            try: driver.quit()
+            except: pass
+            kill_browser_processes()
+            driver = None
+            time.sleep(3)
+
+    print("\n HOÀN TẤT!")
+    if driver: driver.quit()
 
 if __name__ == "__main__":
     crawl_investing()

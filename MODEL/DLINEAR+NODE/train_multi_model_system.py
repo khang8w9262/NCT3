@@ -222,6 +222,7 @@ class MultiModelDataProcessor:
         self.feature_scalers = {}
 
     def load_stock_data(self, stock_name, data_paths):
+<<<<<<< HEAD
         """Load data từ multiple paths"""
         data_frames = []
 
@@ -242,12 +243,29 @@ class MultiModelDataProcessor:
         combined_df = pd.concat(data_frames, ignore_index=True)
 
         # Handle Vietnamese columns
+=======
+        """Load and merge price + sentiment data on Date, ưu tiên ngày có giá, nếu có sentiment thì merge, nếu chỉ có sentiment thì bỏ qua"""
+        if len(data_paths) != 2:
+            print(f"[SKIP] {stock_name}: Need both price and sentiment file.")
+            return None
+        price_path, sentiment_path = data_paths
+        try:
+            price_df = pd.read_csv(price_path, encoding='utf-8-sig')
+            sentiment_df = pd.read_csv(sentiment_path, encoding='utf-8-sig')
+            print(f"Loaded price: {len(price_df)} | sentiment: {len(sentiment_df)}")
+        except Exception as e:
+            print(f"Error loading data for {stock_name}: {e}")
+            return None
+
+        # Rename columns for consistency
+>>>>>>> ea92cc34f9423eab5ed0b95940bb6c040f8d24c7
         column_mapping = {
             'Ngày': 'Date', 'Lần cuối': 'Close', 'Mở': 'Open',
             # Chỉnh sửa lại format data set
             'Cao': 'High', 'Thấp': 'Low', 'KL': 'Volume', '% Thay đổi': 'Change_Pct'
 
         }
+<<<<<<< HEAD
         combined_df = combined_df.rename(columns=column_mapping)
 
         # Parse date and clean data
@@ -259,10 +277,29 @@ class MultiModelDataProcessor:
             if col in combined_df.columns:
                 combined_df[col] = pd.to_numeric(
                     combined_df[col].astype(str).str.replace(',', ''),
+=======
+        price_df = price_df.rename(columns=column_mapping)
+        sentiment_df = sentiment_df.rename(columns=column_mapping)
+
+        # Parse date
+       # Bỏ format cứng, để pandas tự nhận diện YYYY-MM-DD
+        price_df['Date'] = pd.to_datetime(price_df['Date'], errors='coerce')
+        sentiment_df['Date'] = pd.to_datetime(sentiment_df['Date'], errors='coerce')
+
+        # Merge: left join, chỉ lấy ngày có giá, nếu có sentiment thì merge, nếu không thì NaN
+        merged_df = pd.merge(price_df, sentiment_df, on='Date', suffixes=('', '_sentiment'), how='left')
+
+        # Clean numeric columns
+        for col in ['Close', 'Open', 'High', 'Low']:
+            if col in merged_df.columns:
+                merged_df[col] = pd.to_numeric(
+                    merged_df[col].astype(str).str.replace(',', ''), 
+>>>>>>> ea92cc34f9423eab5ed0b95940bb6c040f8d24c7
                     errors='coerce'
                 )
 
         # Remove duplicates and sort
+<<<<<<< HEAD
         combined_df = combined_df.drop_duplicates(
             subset=['Date']).sort_values('Date')
         combined_df = combined_df.dropna(subset=['Close', 'Date'])
@@ -270,6 +307,15 @@ class MultiModelDataProcessor:
         print(f"Final {stock_name} dataset: {len(combined_df)} records")
         return combined_df
 
+=======
+        merged_df = merged_df.drop_duplicates(subset=['Date']).sort_values('Date')
+        drop_cols = [col for col in ['Close', 'Date'] if col in merged_df.columns]
+        if drop_cols:
+            merged_df = merged_df.dropna(subset=drop_cols)
+        print(f"Final {stock_name} merged dataset: {len(merged_df)} records")
+        return merged_df
+    
+>>>>>>> ea92cc34f9423eab5ed0b95940bb6c040f8d24c7
     def create_basic_features(self, df):
         """Tạo basic price features cho LSTM cơ bản"""
         features = pd.DataFrame()
@@ -665,7 +711,13 @@ class MultiModelTrainer:
         if df is None or len(df) < 200:
             print(f"Insufficient data for {stock_name}")
             return None
+<<<<<<< HEAD
 
+=======
+        if 'Close' not in df.columns:
+            print(f"[SKIP] {stock_name}: No 'Close' column found in data. Skipping training for this stock.")
+            return None
+>>>>>>> ea92cc34f9423eab5ed0b95940bb6c040f8d24c7
         prices = df['Close'].values
         results = {}
 
@@ -840,13 +892,18 @@ class MultiModelTrainer:
 
 
 def main():
-    """Main training function"""
+    # Setup paths
+    base_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+    base_price = os.path.join(base_dir, 'DATASET', 'PRICE')
+    base_sentiment = os.path.join(base_dir, 'DATASET', 'SENTIMENT')
+    
     print("MULTI-MODEL TRAINING SYSTEM")
-    print("=" * 60)
+    print("============================================================")
     print("Training 3 models for each stock:")
     print("1. Basic LSTM (price only)")
     print("2. Sentiment DLinear+NODE (price + sentiment)")
     print("3. Hybrid DLinear+NODE (price + residual)")
+<<<<<<< HEAD
     print()
 
     # Define stocks and their data paths
@@ -874,6 +931,38 @@ def main():
             stock_name, existing_paths, epochs=150)
         if results:
             all_results[stock_name] = results
+=======
+
+    # Find matched files
+    price_files = {}
+    if os.path.isdir(base_price):
+        for f in os.listdir(base_price):
+            if f.endswith('_stock_data.csv'):
+                stem = f.replace('_stock_data.csv', '').upper()
+                price_files[stem] = os.path.join(base_price, f)
+
+    sentiment_files = {}
+    if os.path.isdir(base_sentiment):
+        for f in os.listdir(base_sentiment):
+            if f.lower().endswith('_sentiment.csv'):
+                stem = os.path.splitext(f)[0].replace('_sentiment','').upper()
+                sentiment_files[stem] = os.path.join(base_sentiment, f)
+
+    # Chỉ train cho các mã có cả file giá và file sentiment
+    stocks = sorted(set(sentiment_files.keys()) & set(price_files.keys()))
+
+    # --- SỬA Ở ĐÂY: Thêm save_dir='LOGS' ---
+    trainer = MultiModelTrainer(save_dir='LOGS')
+    
+    all_results = {}
+
+    for stock in stocks:
+        data_paths = [price_files[stock], sentiment_files[stock]]
+        print(f"\nProcessing {stock} with paths: {data_paths}")
+        results = trainer.train_all_models_for_stock(stock, data_paths, epochs=150)
+        if results:
+            all_results[stock] = results
+>>>>>>> ea92cc34f9423eab5ed0b95940bb6c040f8d24c7
 
     # Print final summary
     print(f"\n{'='*80}")
@@ -886,9 +975,16 @@ def main():
             r2_score = model_result['r2']
             print(f"  {model_type:12s}: R² = {r2_score:.4f} ({r2_score:.2%})")
 
+<<<<<<< HEAD
     print(f"\n✅ Training completed! Models saved in {trainer.save_dir}/")
     print("📊 Individual model files: [STOCK]_[MODEL]_model.pt")
     print("📋 Training summaries: [STOCK]_training_summary.json")
+=======
+    # In thông báo đã lưu vào LOGS
+    print(f"\n Training completed! Models saved in {trainer.save_dir}/")
+    print(" Individual model files: LOGS/[STOCK]_[MODEL]_model.pt")
+    print(" Training summaries: LOGS/[STOCK]_training_summary.json")
+>>>>>>> ea92cc34f9423eab5ed0b95940bb6c040f8d24c7
 
     return all_results
 
