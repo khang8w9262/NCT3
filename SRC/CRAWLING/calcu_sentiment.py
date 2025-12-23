@@ -285,7 +285,7 @@ def scan_and_process_batch():
     print(f" Đang quét thư mục: {sentiment_dir}")
     
     if not os.path.exists(sentiment_dir):
-        print(f"❌ Không tìm thấy thư mục DATASET/SENTIMENT tại: {sentiment_dir}")
+        print(f" Không tìm thấy thư mục DATASET/SENTIMENT tại: {sentiment_dir}")
         print("Vui lòng kiểm tra lại cấu trúc thư mục.")
         return
 
