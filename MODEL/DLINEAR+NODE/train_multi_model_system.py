@@ -397,10 +397,11 @@ class MultiModelDataProcessor:
             features[f'rsi_{window}']=self.calculate_rsi(df['Close'], window)
 
         # Price changes and momentum
-        features['returns']=df['Close'].pct_change()
+
+        features['returns'] = df['Close'].pct_change()
         features['returns_lag1']=features['returns'].shift(1)
         features['returns_lag2']=features['returns'].shift(2)
-
+        main
         # MACD
         exp1=df['Close'].ewm(span=12).mean()
         exp2=df['Close'].ewm(span=26).mean()
