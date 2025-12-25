@@ -396,16 +396,16 @@
 #             features[f'std_{window}']=df['Close'].rolling(window).std()
 #             features[f'rsi_{window}']=self.calculate_rsi(df['Close'], window)
 
-#         # Price changes and momentum
-#         features['returns']=df['Close'].pct_change()
-#         features['returns_lag1']=features['returns'].shift(1)
-#         features['returns_lag2']=features['returns'].shift(2)
+# Price changes and momentum
+features['returns'] = df['Close'].pct_change()
+features['returns_lag1'] = features['returns'].shift(1)
+features['returns_lag2'] = features['returns'].shift(2)
 
-#         # MACD
-#         exp1=df['Close'].ewm(span=12).mean()
-#         exp2=df['Close'].ewm(span=26).mean()
-#         features['macd']=exp1 - exp2
-#         features['macd_signal']=features['macd'].ewm(span=9).mean()
+# MACD
+exp1 = df['Close'].ewm(span=12).mean()
+exp2 = df['Close'].ewm(span=26).mean()
+features['macd'] = exp1 - exp2
+features['macd_signal'] = features['macd'].ewm(span=9).mean()
 
 #         # Bollinger Bands
 #         sma_20=df['Close'].rolling(20).mean()
