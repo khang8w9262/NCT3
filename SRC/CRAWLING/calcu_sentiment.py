@@ -264,7 +264,7 @@ def process_sentiment_analysis(input_file, output_file, target_code):
         df_out['DateObj'] = pd.to_datetime(df_out['Date'], dayfirst=True, errors='coerce')
         df_out = df_out.sort_values('DateObj').drop(columns=['DateObj']).reset_index(drop=True)
     df_out.to_csv(output_file, index=False, encoding='utf-8-sig')
-    print(f"\n   ✅ Xong! Output: {os.path.basename(output_file)}")
+    print(f"\n    Xong! Output: {os.path.basename(output_file)}")
 
 # =============================================================================
 # TỰ ĐỘNG QUÉT VÀ CHẠY (BATCH PROCESSING)
