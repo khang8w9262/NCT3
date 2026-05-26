@@ -1,0 +1,38 @@
+{
+    "stock_symbol": "AAPL",
+    "time_step": 60,
+    "train_size": 1571,
+    "test_size": 83,
+    "sentiment_features": [
+        "sentiment_score",
+        "impact_score",
+        "short_term_score",
+        "medium_term_score",
+        "sentiment_volatility",
+        "confidence"
+    ],
+    "best_sentiment_factor": 2.4000000000000004,
+    "baseline_metrics": {
+        "da": 50.0,
+        "mape": 1.213997649209323,
+        "rmse": 3.266087240085188,
+        "mae": 2.915758431675919,
+        "r2": 0.8948711049315895,
+        "actual_last": 251.06448364257815,
+        "pred_last": 249.3681182861328
+    },
+    "hybrid_metrics": {
+        "da": 54.87804878048781,
+        "mape": 0.9038457444354578,
+        "rmse": 2.6729937379576145,
+        "mae": 2.1627083096409025,
+        "r2": 0.9295854479746939,
+        "actual_last": 251.06448364257815,
+        "pred_last": 251.5142870861328
+    },
+    "improvement": {
+        "r2_pct": 3.8792562249239464,
+        "mae_pct": 25.826903691818476,
+        "mape_pct": 25.54798231906521
+    }
+}

@@ -1,0 +1,7 @@
+﻿Ticker,Price File,Matched Sentiment File,Valid Sent Cols,Status
+VNM,VNM.csv,<none>,0,MISSING_SENTIMENT_FILE
+ALIBABA,ALIBABA.csv,ALIBABA_sentiment.csv,9,OK
+AMAZON,AMAZON.csv,AMAZON_sentiment.csv,9,OK
+APPLE,APPLE.csv,APPLE_sentiment.csv,9,OK
+GOOGLE,GOOGLE.csv,GOOGLE_sentiment.csv,9,OK
+META,META.csv,META_sentiment.csv,9,OK

@@ -37,33 +37,6 @@ def init_driver():
         print(f"Lỗi khởi tạo driver: {e}")
         return None
 
-# --- HÀM CHUẨN HÓA NGÀY (DD-MM-YYYY) ---
-def format_date_standard(date_str):
-    if not date_str or date_str == "Unknown": return "Unknown"
-    date_str = date_str.strip()
-    
-    # 1. Dạng "trước/ago" -> Lấy hôm nay
-    if any(x in date_str.lower() for x in ['trước', 'ago', 'min', 'hour', 'sec', 'vừa']):
-        return datetime.now().strftime("%d-%m-%Y")
-
-    # 2. Dạng "14/12/2025"
-    match = re.search(r'(\d{1,2})[/-](\d{1,2})[/-](\d{4})', date_str)
-    if match:
-        day, month, year = match.groups()
-        return f"{int(day):02d}/{int(month):02d}/{year}"
-
-    # 3. Dạng tiếng Anh "Dec 14, 2025"
-    try:
-        clean_str = date_str.replace("(", "").replace(")", "").strip()
-        for fmt in ["%b %d, %Y", "%B %d, %Y"]:
-            try:
-                dt = datetime.strptime(clean_str, fmt)
-                return dt.strftime("%d/%m/%Y")
-            except: continue
-    except: pass
-    
-    return date_str
-
 # --- XỬ LÝ CLOUDFLARE ---
 def handle_cloudflare_check(driver):
     try:
@@ -113,7 +86,8 @@ def get_equity_url(symbol_or_name):
 
 def is_header_already_scraped(header_text, ticker_name):
     filename = f"{ticker_name.upper()}.csv"
-    out_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "DATASET", "SENTIMENT")
+    
+    out_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "DATASET","TRAIN", "SENTIMENT")
     out_path = os.path.join(out_dir, filename)
     if os.path.exists(out_path):
         try:
@@ -125,25 +99,14 @@ def is_header_already_scraped(header_text, ticker_name):
 
 def save_to_csv(df, ticker_name):
     filename = f"{ticker_name.upper()}.csv"
-    out_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "DATASET", "SENTIMENT")
+    out_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "DATASET","TRAIN", "SENTIMENT")
     os.makedirs(out_dir, exist_ok=True)
     out_path = os.path.join(out_dir, filename)
     if 'URL' in df.columns: df = df.drop(columns=['URL'])
-    # Normalize Date column to DD-MM-YYYY for both new and existing data
-    try:
-        if 'Date' in df.columns:
-            df['Date'] = df['Date'].apply(lambda x: format_date_standard(x) if pd.notnull(x) else x)
-    except Exception:
-        pass
 
     if os.path.exists(out_path):
         try:
             existing_df = pd.read_csv(out_path, encoding="utf-8-sig")
-            if 'Date' in existing_df.columns:
-                try:
-                    existing_df['Date'] = existing_df['Date'].apply(lambda x: format_date_standard(x) if pd.notnull(x) else x)
-                except Exception:
-                    pass
             combined_df = pd.concat([existing_df, df], ignore_index=True)
             combined_df = combined_df.drop_duplicates(subset=['Header'], keep='first')
             combined_df.to_csv(out_path, index=False, encoding="utf-8-sig")
@@ -157,7 +120,7 @@ def get_article_content(driver):
         handle_cloudflare_check(driver)
         WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.TAG_NAME, "h1")))
         # 1. Ngày đăng (sử dụng hàm trích xuất mạnh mẽ)
-        article_date = extract_article_date(driver)
+        article_date = 'Unknown'
 
         # 2. Header
         header = "Unknown"
@@ -183,66 +146,7 @@ def get_article_content(driver):
 
 
 def extract_article_date(driver):
-    """Try multiple strategies to extract the article publication date from the page.
-    Returns a formatted date string (DD-MM-YYYY) or 'Unknown'.
-    """
-    # 1) meta tags like article:published_time
-    try:
-        metas = driver.find_elements(By.XPATH, "//meta[@property='article:published_time' or @property='og:article:published_time' or @name='pubdate' or @name='article:published_time']")
-        for m in metas:
-            content = m.get_attribute('content')
-            if content:
-                # content often like 2025-12-14T08:00:00Z or Dec 14, 2025
-                # normalize by taking date part or parsing
-                # Try ISO-like
-                iso_match = re.search(r"(\d{4}-\d{2}-\d{2})", content)
-                if iso_match:
-                    return format_date_standard(iso_match.group(1))
-                return format_date_standard(content)
-    except: pass
-
-    # 2) <time datetime="..."> tags
-    try:
-        times = driver.find_elements(By.TAG_NAME, 'time')
-        for t in times:
-            dt = t.get_attribute('datetime')
-            text = t.text
-            if dt:
-                iso_match = re.search(r"(\d{4}-\d{2}-\d{2})", dt)
-                if iso_match:
-                    return format_date_standard(iso_match.group(1))
-            if text:
-                # if the time element has readable text
-                parsed = format_date_standard(text)
-                if parsed != text and parsed != 'Unknown':
-                    return parsed
-    except: pass
-
-    # 3) Look for nodes containing 'Published' or 'Ngày đăng' or variants
-    try:
-        candidates = driver.find_elements(By.XPATH, "//*[contains(text(), 'Published') or contains(text(), 'Published:') or contains(text(), 'Ngày đăng') or contains(text(), 'Ngày đăng:') or contains(text(), 'Ngay dang')]")
-        for c in candidates:
-            txt = c.text.strip()
-            # remove label words
-            txt_clean = re.sub(r"(?i)Published[:]?")
-            txt_clean = txt.lower().replace('published', '').replace('ngày đăng', '').replace('ngay dang', '').replace(':', '').strip()
-            if txt_clean:
-                parsed = format_date_standard(txt_clean)
-                if parsed != 'Unknown':
-                    return parsed
-    except: pass
-
-    # 4) Regex search in page source for ISO datetime
-    try:
-        src = driver.page_source
-        m = re.search(r"(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})", src)
-        if m:
-            return format_date_standard(m.group(1))
-        m2 = re.search(r"(\d{1,2}[/-]\d{1,2}[/-]\d{4})", src)
-        if m2:
-            return format_date_standard(m2.group(1))
-    except: pass
-
+    """Extract article date from page (user will handle date processing manually)"""
     return 'Unknown'
 
 def safe_get(driver, url):

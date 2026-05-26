@@ -87,7 +87,7 @@ class AdvancedYahooFetcher:
             os.makedirs(self.output_dir)
             print(f"Created output directory: {self.output_dir}")
     
-    def fetch_stock_data(self, symbol, period='5y', interval='1d', start_date="2013-07-10", end_date="2024-11-16"):
+    def fetch_stock_data(self, symbol, period='5y', interval='1d', start_date="2013-01-01", end_date="2024-12-31"):
         """
         Fetch stock data from Yahoo Finance
         

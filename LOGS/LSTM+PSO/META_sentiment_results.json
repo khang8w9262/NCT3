@@ -1,0 +1,55 @@
+{
+    "stock_symbol": "META",
+    "time_step": 60,
+    "test_size": 740,
+    "sentiment_features": [
+        "sentiment_score",
+        "impact_score",
+        "short_term_score",
+        "medium_term_score",
+        "sentiment_momentum",
+        "sentiment_volatility",
+        "confidence"
+    ],
+    "best_sentiment_factor": 1.0,
+    "best_method": "Factor Adjustment",
+    "baseline_metrics": {
+        "da": 35.047361299052774,
+        "mape": 1.2485784819453796,
+        "rmse": 10.698514655343207,
+        "mae": 6.6750911848738355,
+        "r2": 0.9922117986429201,
+        "actual_last": 748.91,
+        "pred_last": 756.630859375
+    },
+    "hybrid_factor_adjustment": {
+        "da": 35.047361299052774,
+        "mape": 1.247915632072047,
+        "rmse": 10.669929635004861,
+        "mae": 6.656986400203226,
+        "r2": 0.9922533611378715
+    },
+    "hybrid_residual_model": {
+        "da": 35.047361299052774,
+        "mape": 1.261402919969634,
+        "rmse": 11.367687484543445,
+        "mae": 6.972298417374894,
+        "r2": 0.9912070530951066
+    },
+    "best_hybrid_metrics": {
+        "method": "Factor Adjustment",
+        "da": 35.047361299052774,
+        "mape": 1.247915632072047,
+        "rmse": 10.669929635004861,
+        "mae": 6.656986400203226,
+        "r2": 0.9922533611378715,
+        "actual_last": 748.91,
+        "pred_last": 756.830068375
+    },
+    "improvement": {
+        "r2_pct": 0.004188873283739424,
+        "mae_pct": 0.2712290239815157,
+        "mape_pct": 0.05308836271947985,
+        "da_pct": 0.0
+    }
+}

@@ -1,0 +1,3 @@
+Ticker,Mode,DA (%),MAPE (%),RMSE,MAE,R2,Actual Last,Pred Last
+META,Baseline (LSTM+PSO),35.05,1.25,10.6985,6.6751,0.9922,748.91,756.6300048828125
+META,"Hybrid (+Sentiment, Factor Adjustment)",35.05,1.25,10.6699,6.657,0.9923,748.91,756.83

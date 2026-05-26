@@ -1,0 +1,3 @@
+Ticker,Mode,DA (%),MAPE (%),RMSE,MAE,R2,Actual Last,Pred Last
+BABA,Baseline (LSTM+PSO),47.94,1.78,2.219,1.5579,0.962118,88.59,90.76000213623047
+BABA,"Hybrid (+Sentiment, Factor Adjustment)",47.54,1.77,2.2124,1.5552,0.96234,88.59,91.01

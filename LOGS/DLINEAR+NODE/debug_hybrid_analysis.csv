@@ -1,0 +1,7 @@
+﻿Ticker,File_Found,Total_Cols,Detected_Sentiment_Cols,Sentiment_Cols,Data_Rows,NaN_Percent
+ALIBABA,YES,12,9,"sentiment_score, impact_score, relevance_score, confidence, short_term_score, medium_term_score, sentiment_momentum, sentiment_volatility, sentiment_trend",240,26.2%
+AMAZON,YES,12,9,"sentiment_score, impact_score, relevance_score, confidence, short_term_score, medium_term_score, sentiment_momentum, sentiment_volatility, sentiment_trend",2310,0.0%
+APPLE,YES,12,9,"sentiment_score, impact_score, relevance_score, confidence, short_term_score, medium_term_score, sentiment_momentum, sentiment_volatility, sentiment_trend",1020,0.0%
+GOOGLE,YES,14,9,"sentiment_score, impact_score, relevance_score, confidence, short_term_score, medium_term_score, sentiment_momentum, sentiment_volatility, sentiment_trend",2565,51.8%
+META,YES,12,9,"sentiment_score, impact_score, relevance_score, confidence, short_term_score, medium_term_score, sentiment_momentum, sentiment_volatility, sentiment_trend",1661,0.0%
+VNM,YES,12,9,"sentiment_score, impact_score, relevance_score, confidence, short_term_score, medium_term_score, sentiment_momentum, sentiment_volatility, sentiment_trend",2268,0.0%

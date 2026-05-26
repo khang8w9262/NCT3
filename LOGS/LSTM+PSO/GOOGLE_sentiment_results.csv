@@ -1,0 +1,9 @@
+Metric,Baseline,Hybrid
+R² Score,0.9877,0.9877
+RMSE (USD),2.3994,2.3994
+MAE (USD),1.6916,1.6916
+MAPE (%),1.13,1.13
+Direction Accuracy (%),51.17,51.17
+Last Actual Price,173.89,173.89
+Last Baseline Pred,174.71,-
+Last Hybrid Pred,-,174.71

@@ -1,5 +1,5 @@
 Project: NCT3
-
+python.exe -m pip install -r requirements.txt
 
 NCT3/
 ├─ README.md
@@ -40,9 +40,19 @@ Cấu trúc thư mục chính
 - SRC/
   - Mã nguồn (scripts, mô-đun) của dự án.
   - `CRAWLING/` chứa script thu thập dữ liệu (crawlers hoặc extractor).
-
-File ở thư mục gốc
-- `README.md`: file markdown chính (nội dung hiện có trong repo).
+  - Chi tiết các script trong `CRAWLING/`:
+    1. `crawler_content_investing.py`
+       - Chức năng: Crawl tin tức chứng khoán từ vn.investing.com, tự động vượt Cloudflare.
+       - Cách chạy: `python SRC/CRAWLING/crawler_content_investing.py` -> Nhập mã (VD: VNM).
+    2. `crawler_price_yahoo.py`
+       - Chức năng: Tải dữ liệu giá OHLCV từ Yahoo Finance, hỗ trợ tìm kiếm mã.
+       - Cách chạy: `python SRC/CRAWLING/crawler_price_yahoo.py` -> Chọn chế độ.
+    3. `set_day.py`
+       - Chức năng: Chuẩn hóa cột Date của toàn bộ dữ liệu trong DATASET về YYYY-MM-DD.
+       - Cách chạy: `python SRC/CRAWLING/set_day.py`.
+    4. `calcu_sentiment.py`
+       - Chức năng: Tính điểm Sentiment từ tin tức bằng PhoBERT.
+       - Cách chạy: `python SRC/CRAWLING/calcu_sentiment.py` (Tự động xử lý cả thư mục).
 
 Gợi ý sử dụng nhanh
 - Để xem dữ liệu thô: mở `DATASET/PRICE` và `DATASET/SENTIMENT`.
@@ -55,3 +65,4 @@ Ghi chú
 
 Người liên hệ
 - Chủ repo: người phát triển trong repo (liên hệ theo thông tin dự án).
+

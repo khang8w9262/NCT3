@@ -1,0 +1,32 @@
+{
+    "stock_symbol": "VNM.VN",
+    "time_step": 90,
+    "train_size": 871,
+    "test_size": 46,
+    "sentiment_features": [
+        "sentiment_score",
+        "impact_score",
+        "short_term_score",
+        "medium_term_score",
+        "sentiment_momentum",
+        "sentiment_volatility",
+        "confidence"
+    ],
+    "baseline_metrics": {
+        "mse": 90803.63327258642,
+        "mae": 178.4182235054362,
+        "rmse": 301.3364121253627,
+        "r2": 0.4151130551430833
+    },
+    "sentiment_metrics": {
+        "mse": 244337.04043652155,
+        "mae": 385.4281252964411,
+        "rmse": 494.3046028882612,
+        "r2": -0.5738306931760442
+    },
+    "improvement": {
+        "mse_pct": -169.08288978155548,
+        "mae_pct": -116.0250885385021,
+        "r2_pct": -238.23479798250463
+    }
+}

@@ -1,0 +1,32 @@
+# Generated based on codebase analysis and local .venv
+# Core Data Analysis
+pandas>=2.2
+numpy==2.4.0
+scikit-learn
+# Financial Data
+yfinance
+
+# Web Crawling & Automation
+seleniumbase
+selenium
+
+# Machine Learning & NLP
+transformers
+torch
+
+
+
+# Optimization
+pyswarms
+
+# Visualization
+matplotlib
+seaborn
+
+# Utilities & Dependencies
+python-dateutil==2.9.0.post0
+pytz==2025.2
+six==1.17.0
+tzdata==2025.3
+ipython
+keras

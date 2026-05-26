@@ -1,0 +1,30 @@
+{
+  "stock": "GOOGLE",
+  "best_method": "Factor Adjustment",
+  "baseline": {
+    "r2": 0.9876548697111649,
+    "rmse": 2.3994325108750023,
+    "mae": 1.6916150900915592,
+    "mape": 1.1253826650763348,
+    "direction_accuracy": 51.17056856187291
+  },
+  "hybrid": {
+    "method": "Factor Adjustment",
+    "r2": 0.9876548697111649,
+    "rmse": 2.3994325108750023,
+    "mae": 1.6916150900915592,
+    "mape": 1.1253826650763348,
+    "direction_accuracy": 51.17056856187291,
+    "factor": 0.0
+  },
+  "improvement": {
+    "r2_pct": 0.0,
+    "mape_pct": 0.0,
+    "mae_pct": 0.0
+  },
+  "last_predictions": {
+    "actual": 173.88999999999996,
+    "baseline": 174.71449279785156,
+    "hybrid": 174.71449279785156
+  }
+}
